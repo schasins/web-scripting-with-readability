@@ -151,6 +151,7 @@ function processEvent(eventData) {
     eventMessage['dispatchType'] = dispatchType;
     eventMessage['nodeName'] = nodeName;
     eventMessage['pageEventId'] =  eventId++;
+    eventMessage['targetSnapshot'] = snapshotNode(target);
     
     for (var prop in properties) {
       if (prop in eventData) {
@@ -178,31 +179,9 @@ function processEvent(eventData) {
     if (!params.simulataneous) {
       port.postMessage({type: 'event', value: eventMessage});
     }
-
-    if (recording == RecordState.RECORDING) {
-      prevRecordSnapshot = curRecordSnapshot;
-      curRecordSnapshot = snapshot();
-
-      updateRecordDeltas();
-      lastRecordEvent = eventMessage;
-    }
   }
   return true;
 };
-
-function updateRecordDeltas() {
-  if (lastRecordEvent) {
-    var deltas = getDomDivergence(prevRecordSnapshot, curRecordSnapshot);
-    if (!params.simultaneous) {
-      var update = {type: 'updateEvent', value: {'deltas': deltas,
-                    'pageEventId': lastRecordEvent.pageEventId}};
-      port.postMessage(update);
-    } else {
-      lastRecordEvent.deltas = deltas;
-      port.postMessage({type: 'event', value: lastRecordEvent});
-    }
-  }
-}
 
 // event handler for messages coming from the background page
 function handleMessage(request) {
@@ -279,48 +258,6 @@ function simulate(request) {
   }
   var target = nodes[0];
 
-  if (params.synthesis.enabled && lastReplayEvent) {
-    // make sure the deltas from the last event actually happened
-    var recordDeltas = lastReplayEvent.deltas || [];
-
-    // run the old compensation events
-    for (var i in annotationEvents) {
-      var annotation = annotationEvents[i];
-      if (annotation.replay && annotation.guard(target, lastReplayEvent)) {
-        if (synthesisVerbose){
-          log.log("annotation event being used", i, annotation.recordNodes,
-                      annotation.replayNodes);
-        }
-        annotation.replay(target, lastReplayEvent);
-      }
-    }
-
-    // calculate the deltas between the last simulated event and this one
-    prevReplaySnapshot = curReplaySnapshot;
-    curReplaySnapshot = snapshot();
-    var replayDeltas = getDomDivergence(prevReplaySnapshot, curReplaySnapshot);
-
-    // check if these deltas match the deltas from the last simulated event
-    // and synthesize appropriate compensation events for unmatched deltas
-    synthesize(recordDeltas, replayDeltas, target, lastReplayEvent);
-
-    // run the new compensation events
-    for (var i in annotationEvents) {
-      var annotation = annotationEvents[i];
-      if (annotation.replay && annotation.guard(target, lastReplayEvent)) {
-        if (synthesisVerbose){
-          log.log("annotation event being used", i, annotation.recordNodes,
-                      annotation.replayNodes);
-        }
-        annotation.replay(target, lastReplayEvent);
-      }
-    }
-
-    curReplaySnapshot = snapshot();
-  }
-
-  lastReplayEvent = eventData
-
   var eventType = getEventType(eventName);
   var defaultProperties = getEventProps(eventName);
 
@@ -385,44 +322,6 @@ function simulate(request) {
 
   //let's update a div letting us know what event we just got
   sendAlert('Received Event: ' + eventData.type);
-}
-
-function synthesize(recordDeltas, replayDeltas, target, recordEventMessage) {
-
-  log.log('RECORD DELTAS', recordDeltas);
-  log.log('REPLAY DELTAS', replayDeltas);
-
-  //effects of events that were found in record browser but not replay browser
-  var recordDeltasNotMatched = filterDivergences(recordDeltas, replayDeltas);
-  //effects of events that were found in replay browser but not record browser
-  var replayDeltasNotMatched = filterDivergences(replayDeltas, recordDeltas);
-
-  log.log('recordDeltasNotMatched', recordDeltasNotMatched);
-  log.log('replayDeltasNotMatched', replayDeltasNotMatched);
-
-  //the thing below is the stuff that's doing divergence synthesis
-
-  for (var i = 0, ii = recordDeltasNotMatched.length; i < ii; i++) {
-    var delta = recordDeltasNotMatched[i];
-    //addComment('delta', JSON.stringify(recordDeltasNotMatched));
-    if (delta.type == "We expect these nodes to be the same, but they're " +
-                      'not.') {
-      generateCompensationEvent(target, recordEventMessage, 
-                                delta, true);
-    }
-  }
-
-  // not currently true
-  //generateCompensationEvent will change the state of the DOM to be what it
-  //should have been, if the proper compensation events were in place
-  //but we don't want to associate these changes with the next event
-  //so let's snapshot the DOM again
-  /*if (recordDeltasNotMatched.length > 0 || replayDeltasNotMatched.length > 0) {
-    //curSnapshotReplay = snapshot();
-    prevSnapshotRecord = curSnapshotRecord;
-    curSnapshotRecord = snapshot();
-  }
-*/
 }
 
 function checkWait(eventData) {

@@ -10,12 +10,12 @@ var params = null;
   var events = {
     'Event': {
       //'abort': true,
-      'blur': true,
-      'change': true,  // change event occurs before focus is lost (blur)
+      'blur': false,
+      'change': false,  // change event occurs before focus is lost (blur)
       'copy': true,
       'cut': true,
       'error': false,
-      'focus': true,
+      'focus': false,
       'input': true,  // input event occurs on every keystroke (or cut / paste)
       'load': false,
       'paste': true,

@@ -265,7 +265,7 @@ var Panel = (function PanelClosure() {
       }
     },
     addEvent: function _addEvent(eventRecord) {
-      var eventInfo = eventRecord.msg.value;
+      //var eventInfo = eventRecord.msg.value;
       var id = eventRecord.id;
       var tab = eventRecord.tab;
       var topURL = eventRecord.topURL;
@@ -273,24 +273,23 @@ var Panel = (function PanelClosure() {
       var topFrame = eventRecord.topFrame;
       var iframeIndex = eventRecord.iframeIndex;
       var waitTime = eventRecord.waitTime;
+      var display = eventRecord.display;
+      var target = eventRecord.target;
 
 
       var newDiv = "<div class='event wordwrap' id='" + id + "'>";
 
-      newDiv += '<b>[' + id + ']type:' + '</b>' + eventInfo.type +
+      newDiv += '<b>[' + id + ']type:' + '</b>' + eventRecord.type +
                 '<br/>';
-      newDiv += '<b>tab:' + '</b>' + tab + '<br/>';
-      newDiv += '<b>topURL:' + '</b>' + topURL + '<br/>';
-      newDiv += '<b>port:' + '</b>' + portName + '<br/>';
-      newDiv += '<b>topFrame:' + '</b>' + topFrame + '<br/>';
-      newDiv += '<b>iframeIndex:' + '</b>' + iframeIndex + '<br/>';
-      newDiv += '<b>waitTime:' + '</b>' + waitTime + '<br/>';
+      newDiv += display + '<br/>';
+      newDiv += '<b>target:' + '</b>' + target + '<br/>';
+      //newDiv += '<b>tab:' + '</b>' + tab + '<br/>';
+      //newDiv += '<b>topURL:' + '</b>' + topURL + '<br/>';
+      //newDiv += '<b>port:' + '</b>' + portName + '<br/>';
+      //newDiv += '<b>topFrame:' + '</b>' + topFrame + '<br/>';
+      //newDiv += '<b>iframeIndex:' + '</b>' + iframeIndex + '<br/>';
+      //newDiv += '<b>waitTime:' + '</b>' + waitTime + '<br/>';
 
-      for (var prop in eventInfo) {
-        if (prop != 'type') {
-          newDiv += '<b>' + prop + ':' + '</b>' + eventInfo[prop] + '<br/>';
-        }
-      }
       newDiv += '</div>';
       $('#events').append(newDiv);
     },
@@ -314,6 +313,8 @@ var Record = (function RecordClosure() {
   function Record(ports) {
     this.ports = ports;
     this.events = [];
+    this.recentEvents = [];
+    this.interpretedEvents = [];
     this.comments = [];
     this.replayEvents = [];
     this.replayComments = [];
@@ -433,10 +434,32 @@ var Record = (function RecordClosure() {
         eventRecord.id = 'event' + events.length;
 
         this.events.push(eventRecord);
+        
+        var sameEventCategory, sameTarget = false;
+        if (this.recentEvents.length > 0){
+	        sameEventCategory = this.eventCategory(eventRecord) == this.eventCategory(this.recentEvents[0]);
+	        sameTarget = eventRecord.msg.value.target == this.recentEvents[0].msg.value.target;
+	    }
+        if (this.recentEvents.length == 0 || (sameEventCategory && sameTarget)){
+        	recordLog.log("same list: ");
+        	recordLog.log(eventRecord);
+        	this.recentEvents.push(eventRecord);
+        }
+        else{
+        	//found an event with a new target
+        	var interpretedEvent = this.interpretEvents(this.recentEvents);
+        	recordLog.log("different list: "+eventRecord.msg.value.target);
+        	recordLog.log("NEW INTERPRETED EVENT: "+interpretedEvent);
+        	this.interpretedEvents.push(interpretedEvent);
+        	this.panel.addEvent(interpretedEvent);
+        	this.recentEvents = [eventRecord]; //time to start a new recentEvents
+        }
+        /*
         this.panel.addEvent(eventRecord);
         if (params.simultaneous) {
           this.simultaneousReplayer.simultaneousReplay(eventRecord);
         }
+        */
       } else if (this.recordState == RecordState.REPLAYING) {
         var replayEvents = this.replayEvents;
         eventRecord.id = 'event' + replayEvents.length;
@@ -444,6 +467,18 @@ var Record = (function RecordClosure() {
         replayEvents.push(eventRecord);
       }
       this.commentCounter = 0;
+    },
+    eventCategory: function _eventCategory(eventMsg){
+    	var eventType = eventMsg.msg.value.type;
+    	if (["click","mouseup","mousedown"].indexOf(eventType) > -1){
+    		return "click";
+    	}
+    	if (["textInput","keypress","keyup","keydown","input"].indexOf(eventType) > -1){
+    		return "type";
+    	}
+    	else {
+    		return "unknown";
+    	}
     },
     updateEvent: function _updateEvent(eventRequest, portName) {
       var events = this.events;
@@ -460,6 +495,46 @@ var Record = (function RecordClosure() {
           break;
         }
       }
+    },
+    interpretEvents: function _interpretEvents(listOfEvents){
+    	var interpretedEvent = [];
+    	interpretedEvent['target'] = listOfEvents[0].msg.value.target;
+    	if (this.eventCategory(listOfEvents[0])=="click"){
+    		//it's a click!
+    		console.log("it's a click");
+    		interpretedEvent['type'] = 'click';
+    		interpretedEvent['events'] = listOfEvents;
+    		interpretedEvent['display'] = "You clicked.";
+    	}
+    	else if (this.eventCategory(listOfEvents[0])=="type"){
+    		//it's typing
+    		console.log("it's typing");
+    		interpretedEvent['type'] = 'type';
+    		console.log(listOfEvents[listOfEvents.length-1].msg.value);
+    		interpretedEvent['value'] = listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot.prop.value;
+    		interpretedEvent['display'] = "You typed: '"+interpretedEvent['value']+"'.";
+    	}
+    	else{
+    		interpretedEvent['type'] = 'unknown';
+    		interpretedEvent['display'] = listOfEvents[0].msg.value.type;
+    	}
+    	return interpretedEvent;
+    },
+    eventTypesAre: function _eventTypesAre(listOfEvents,eventTypes){
+    	var acc = true;
+    	for (var i = 0; i < listOfEvents.length; i++){
+    		//console.log(eventTypes);
+    		//console.log(listOfEvents[i].msg.value.type);
+    		//console.log(eventTypes.indexOf(listOfEvents[i].msg.value.type) > -1);
+    		acc = acc && (eventTypes.indexOf(listOfEvents[i].msg.value.type) > -1);
+    	}
+    	console.log("acc: "+acc);
+    	return acc;
+    	/*
+    	return (_.reduce(listOfEvents, function(acc, event) {
+    		return (acc && event.msg.value.type in eventTypes);
+  		}, true));
+  		*/
     },
     clearEvents: function _clearEvents() {
       this.loadedScriptId = null;

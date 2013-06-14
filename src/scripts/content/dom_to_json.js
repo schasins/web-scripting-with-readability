@@ -3,59 +3,37 @@
 
 'use strict';
 
-var snapshotDom = null;
 var snapshot = null;
+var snapshotNode = null;
+
+// taken from http://stackoverflow.com/questions/2631820/im-storing-click-coor
+// dinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
+function nodeToXPath(element) {
+//  if (element.id !== '')
+//    return 'id("' + element.id + '")';
+  if (element.tagName.toLowerCase() === 'html')
+    return element.tagName;
+
+  var ix = 0;
+  var siblings = element.parentNode.childNodes;
+  for (var i = 0, ii = siblings.length; i < ii; i++) {
+    var sibling = siblings[i];
+    if (sibling === element)
+      return nodeToXPath(element.parentNode) + '/' + element.tagName +
+             '[' + (ix + 1) + ']';
+    if (sibling.nodeType === 1 && sibling.tagName === element.tagName)
+      ix++;
+  }
+}
 
 (function() {
   var ignoreTags = {'script': true, 'style': true};
+  
+  function cloneNode(node, nodeName, xpath){
 
-  function createObjTree(node, nodeName, xpath) {
-    var returnVal = {children: [], prop: {}};
+    var returnVal = {children: [], prop: {}, type: 'DOM'};
     returnVal.prop['nodeName'] = nodeName;
     returnVal.prop['xpath'] = xpath;
-
-    if (node.hasChildNodes()) {
-      var childNodes = node.childNodes;
-      var children = returnVal.children;
-
-      var childrenTags = {};
-      for (var i = 0, ii = childNodes.length; i < ii; ++i) {
-        var child = childNodes.item(i);
-        var nodeType = child.nodeType;
-
-        //let's track the number of tags of this kind we've seen in the
-        //children so far, to build the xpath
-        var childNodeName = child.nodeName.toLowerCase();
-        if (!(childNodeName in childrenTags)) {
-          childrenTags[childNodeName] = 1;
-        }
-        else {
-          childrenTags[childNodeName] += 1;
-        }
-/*
-        if (oChild.nodeType === 4) {
-          var value = oChild.nodeValue;
-          if (value)
-            children.push(value); // nodeType is "CDATASection" (4)
-        } else
-*/
-        if (nodeType === 3) {
-          var value = child.nodeValue.trim();
-          if (value)
-            children.push(value); // nodeType is "Text" (3)
-        } else if (nodeType === 1) {
-          /*&& !oChild.prefix &&*/
-          if (!(childNodeName in ignoreTags) &&
-              !child.classList.contains('replayStatus')) {
-            // nodeType is "Element" (1)
-            var newPath = xpath + '/' + childNodeName + '[' +
-                          childrenTags[childNodeName] + ']';
-            var child = createObjTree(child, childNodeName, newPath);
-            children.push(child);
-          }
-        }
-      }
-    }
 
     // possible failure due to cross-domain browser restrictions
     if (nodeName != 'iframe') {
@@ -79,11 +57,50 @@ var snapshot = null;
     return returnVal;
   }
 
+  function cloneSubtree(node, nodeName, xpath) {
+    var returnVal = cloneNode(node, nodeName, xpath);
+
+    if (node.hasChildNodes()) {
+      var childNodes = node.childNodes;
+      var children = returnVal.children;
+
+      var childrenTags = {};
+      for (var i = 0, ii = childNodes.length; i < ii; ++i) {
+        var child = childNodes.item(i);
+        var nodeType = child.nodeType;
+
+        //let's track the number of tags of this kind we've seen in the
+        //children so far, to build the xpath
+        var childNodeName = child.nodeName.toLowerCase();
+        if (!(childNodeName in childrenTags))
+          childrenTags[childNodeName] = 1;
+        else
+          childrenTags[childNodeName] += 1;
+
+        if (nodeType === 3) { // nodeType is "Text" (3)
+          var value = child.nodeValue.trim();
+          if (value)
+            children.push({text: value, type: 'text'}); 
+        } else if (nodeType === 1) { // nodeType is "Element" (1)
+          if (!(childNodeName in ignoreTags) &&
+              !child.classList.contains('replayStatus')) {
+            
+            var newPath = xpath + '/' + childNodeName + '[' +
+                          childrenTags[childNodeName] + ']';
+            var child = cloneSubtree(child, childNodeName, newPath);
+            children.push(child);
+          }
+        }
+      }
+    }
+
+    return returnVal;
+  }
+
   function descendToBody(node) {
     var nodeName = node.nodeName.toLowerCase();
     if (nodeName == 'body') {
-      var objTree = createObjTree(node, nodeName, 'html/body[1]');
-      //console.log(objTree);
+      var objTree = cloneSubtree(node, nodeName, 'html/body[1]');
       return objTree;
     }
 
@@ -99,10 +116,16 @@ var snapshot = null;
     return null;
   }
 
-  snapshotDom = descendToBody;
   snapshot = function() {
-    return snapshotDom(document);
+    return descendToBody(document);
+  };
+  
+  snapshotNode = function(node) {
+    if (!node)
+      return null;
+
+	  var objTree = cloneNode(node, node.nodeName, nodeToXPath(node));
+	  return objTree;
   };
 
 })();
-
