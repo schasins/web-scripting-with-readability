@@ -275,6 +275,7 @@ var Panel = (function PanelClosure() {
       var waitTime = eventRecord.waitTime;
       var display = eventRecord.display;
       var target = eventRecord.target;
+      var divergingProps = eventRecord.divergingProps;
 
 
       var newDiv = "<div class='event wordwrap' id='" + id + "'>";
@@ -283,6 +284,11 @@ var Panel = (function PanelClosure() {
                 '<br/>';
       newDiv += display + '<br/>';
       newDiv += '<b>target:' + '</b>' + target + '<br/>';
+      for (var i = 0 ; i < divergingProps.length ; i++){
+		  var prop = divergingProps[i];
+		  console.log(prop);
+		  newDiv += '<b>change:' + '</b>' + prop.prop + ': ' + prop.original + '->' + prop.final + '<br/>';
+	  }
       //newDiv += '<b>tab:' + '</b>' + tab + '<br/>';
       //newDiv += '<b>topURL:' + '</b>' + topURL + '<br/>';
       //newDiv += '<b>port:' + '</b>' + portName + '<br/>';
@@ -496,14 +502,33 @@ var Record = (function RecordClosure() {
         }
       }
     },
+    divergingProps: function _divergingProps(eventRecord1,eventRecord2){
+	  var obj1 = eventRecord1.msg.value.targetSnapshot;
+	  var obj2 = eventRecord2.msg.value.targetSnapshot;
+	  if (!(obj1 && obj2 && obj1.prop && obj2.prop)) {
+		console.log('DIVERGING PROP WEIRDNESS ', obj1, obj2);
+		return [];
+	  }
+	  var obj1props = _.omit(obj1.prop, params.synthesis.omittedProps);
+	  var obj2props = _.omit(obj2.prop, params.synthesis.omittedProps);
+
+	  var divergingProps = [];
+	  for (var prop in obj1props) {
+		if (obj1props[prop] != obj2props[prop]) {
+		  divergingProps.push({prop: prop, original: obj1props[prop], final: obj2props[prop]});
+		}
+	  }
+	  return divergingProps;
+	},
     interpretEvents: function _interpretEvents(listOfEvents){
     	var interpretedEvent = [];
     	interpretedEvent['target'] = listOfEvents[0].msg.value.target;
+    	interpretedEvent['events'] = listOfEvents;
+    	interpretedEvent['divergingProps'] = this.divergingProps(listOfEvents[0],listOfEvents[listOfEvents.length-1]);
     	if (this.eventCategory(listOfEvents[0])=="click"){
     		//it's a click!
     		console.log("it's a click");
     		interpretedEvent['type'] = 'click';
-    		interpretedEvent['events'] = listOfEvents;
     		interpretedEvent['display'] = "You clicked.";
     	}
     	else if (this.eventCategory(listOfEvents[0])=="type"){
