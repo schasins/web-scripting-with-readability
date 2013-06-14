@@ -572,6 +572,9 @@ var Record = (function RecordClosure() {
     getEvents: function _getEvents() {
       return this.events.slice(0);
     },
+    getInterpretedEvents: function _getEvents() {
+      return this.interpretedEvents.slice(0);
+    },
     getReplayEvents: function _getReplayEvents() {
       return this.replayEvents.slice(0);
     },
@@ -630,9 +633,7 @@ var Replay = (function ReplayClosure() {
       this.record.startReplayRecording();
 
       var replay = this;
-      this.timeoutHandle = setTimeout(function() {
-        replay.guts();
-      }, this.getNextTime());
+      replay.guts();
     },
     reset: function _reset() {
       this.index = 0;
@@ -642,7 +643,7 @@ var Replay = (function ReplayClosure() {
     },
     setNextEvent: function _setNextEvent(time) {
       if (typeof time == 'undefined') {
-        time = this.getNextTime();
+        time = 0;
       }
 
       var replay = this;
@@ -795,31 +796,30 @@ var Replay = (function ReplayClosure() {
       return newPort;
     },
     guts: function _guts() {
-      var events = this.events;
+      var interpretedEvents = this.events;
       var index = this.index;
       var portMapping = this.portMapping;
       var tabMapping = this.tabMapping;
 
-      if (index >= events.length) {
+      if (index >= interpretedEvents.length) {
         this.finish();
         return;
       }
 
-      var e = events[index];
-      var msg = e.msg;
+      var interpretedEvent = interpretedEvents[index];
+      var e = interpretedEvent.events[0];
+      var msg = interpretedEvent;
       var port = e.port;
       var tab = e.tab;
       var id = e.id;
       var url = e.topURL;
       var topFrame = e.topFrame;
       var iframeIndex = e.iframeIndex;
-      var snapshot = msg.value.snapshot;
+      var target = interpretedEvent.target;
 
-      $('#status').text('Replay ' + index);
-      $('#' + id).get(0).scrollIntoView();
+      $('#status').text('Replay ' + index + " "+ interpretedEvent.type);
+      //$('#' + id).get(0).scrollIntoView();
       //$("#container").scrollTop($("#" + e.id).prop("offsetTop"));
-
-      replayLog.log('background replay:', id, msg, port, tab);
 
       // lets find the corresponding port
       var replayPort = null;
@@ -860,7 +860,9 @@ var Replay = (function ReplayClosure() {
       }
 
       // we have hopefully found a matching port, lets dispatch to that port
-      var type = msg.value.type;
+      var type = msg.type;
+      console.log("msg.type: "+msg.type);
+      console.log("replayState: "+this.replayState);
       var replayState = this.replayState;
 
       if (replayState == ReplayState.WAIT_ACK) {
@@ -890,8 +892,9 @@ var Replay = (function ReplayClosure() {
         }
       } else if (replayState == ReplayState.REPLAYING) {
         this.ports.clearAck();
+        //TODO: not sure when this would actually happen.  want to make sure we're actually waiting when needed
         if (type == 'wait') {
-          replayPort.postMessage(msg);
+          replayPort.postMessage({type:"wait",target:target});
           this.index++;
           this.replayState = ReplayState.WAIT_ACK;
           this.setNextEvent(0);
@@ -1073,7 +1076,8 @@ var Controller = (function ControllerClosure() {
 
       var record = this.record;
       var events = record.getEvents();
-      var replay = new Replay(events, this.panel, this.ports, record,
+      var interpretedEvents = record.getInterpretedEvents();
+      var replay = new Replay(interpretedEvents, this.panel, this.ports, record,
                               this.scriptServer);
       this.replay = replay;
       replay.replay();
