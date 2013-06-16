@@ -713,15 +713,15 @@ var Replay = (function ReplayClosure() {
       var ports = this.ports;
       var newTabId = this.tabMapping[tab];
       var portInfo = ports.getTabInfo(newTabId);
-      replayLog.log('trying to find port in tab:', portInfo);
+      replayLog.log('trying to find port in tab:');
 
       if (!portInfo) {
         return;
       }
       var newPort = null;
       if (topFrame) {
-        replayLog.log('assume port is top level page');
         var topFrame = portInfo.top;
+        //msg has to have value
         var commonUrl = lcs(topFrame.URL, msg.value.URL);
 
         var commonRatio = commonUrl.length / msg.value.URL.length;
@@ -816,6 +816,7 @@ var Replay = (function ReplayClosure() {
       var topFrame = e.topFrame;
       var iframeIndex = e.iframeIndex;
       var target = interpretedEvent.target;
+      var snapshot = e.snapshot;
 
       $('#status').text('Replay ' + index + " "+ interpretedEvent.type);
       //$('#' + id).get(0).scrollIntoView();
@@ -831,7 +832,7 @@ var Replay = (function ReplayClosure() {
       // we have already seen this tab, find equivalent port for tab
       // for now we will just choose the last port added from this tab
       } else if (tab in tabMapping) {
-        var newPort = this.findPortInTab(tab, topFrame, snapshot, msg);
+        var newPort = this.findPortInTab(tab, topFrame, snapshot, e.msg);
 
         if (newPort) {
           portMapping[port] = newPort;
@@ -851,7 +852,7 @@ var Replay = (function ReplayClosure() {
           function(newTab) {
             replayLog.log('new tab opened:', newTab);
             var newTabId = newTab.id;
-            replay.tabMapping[tab] = newTabId;
+            replay.tabMapping[tab] = newTabId;interpretedEvent
             replay.ports.tabIdToTab[newTabId] = newTab;
             replay.setNextEvent(4000);
           }
@@ -862,6 +863,7 @@ var Replay = (function ReplayClosure() {
       // we have hopefully found a matching port, lets dispatch to that port
       var type = msg.type;
       console.log("msg.type: "+msg.type);
+      console.log(interpretedEvent);
       console.log("replayState: "+this.replayState);
       var replayState = this.replayState;
 
@@ -873,7 +875,7 @@ var Replay = (function ReplayClosure() {
 
           replayLog.log('found wait ack');
         } else {
-          replayPort.postMessage(msg);
+          replayPort.postMessage({type:"wait",target:interpretedEvent.target});
           this.setNextEvent(1000);
 
           replayLog.log('continue waiting for wait ack');

@@ -190,6 +190,10 @@ function handleMessage(request) {
     recording = request.value;
   } else if (request.type == 'params') {
     updateParams(request.value);
+  } else if (request.type == 'wait') {
+    checkWait(request.target);
+  } else if (request.type == 'interpretedEvent') {
+    simulateInterpretedEvent(request.event);
   } else if (request.type == 'event') {
     simulate(request);
   } else if (request.type == 'snapshot') {
@@ -238,11 +242,6 @@ function simulate(request) {
   //we don't want to have to snapshot every time as though we're
   //recording.  so let's set inReplayTab to true
   inReplayTab = true;
-
-  if (eventName == 'wait') {
-    checkWait(eventData);
-    return;
-  }
 
   if (eventName == 'custom') {
     var script = eval(eventData.script);
@@ -324,9 +323,9 @@ function simulate(request) {
   sendAlert('Received Event: ' + eventData.type);
 }
 
-function checkWait(eventData) {
+function checkWait(target) {
   replayLog.log('checking:', eventData);
-  var result = eval(eventData.condition);
+  var result = nodeExists(target);
   port.postMessage({type: 'ack', value: result});
 }
 
