@@ -193,13 +193,13 @@ function handleMessage(request) {
   } else if (request.type == 'wait') {
     checkWait(request.target);
   } else if (request.type == 'interpretedEvent') {
-    simulateInterpretedEvent(request.event);
+	console.log("request");
+	console.log(request);
+    simulateInterpretedEvent(JSON.parse(request.interpretedEvent));
   } else if (request.type == 'event') {
     simulate(request);
   } else if (request.type == 'snapshot') {
     port.postMessage({type: 'snapshot', value: snapshotDom(document)});
-  } else if (request.type == 'deltas') {
-    updateRecordDeltas();
   } else if (request.type == 'reset') {
     reset();
   } else if (request.type == 'url') {
@@ -309,8 +309,8 @@ function simulate(request) {
     log.log('Unknown type of event');
   }
   replayLog.log('[' + id + '] dispatchEvent', eventName, options, oEvent);
-  port.postMessage({type: 'ack', value: true});
-  replayLog.log('[' + id + '] sent ack');
+  //port.postMessage({type: 'ack', value: true});
+  //replayLog.log('[' + id + '] sent ack');
 
   //we're going to use this for synthesis, if synthesis is on
   mostRecentEventMessage = eventData;
@@ -323,10 +323,40 @@ function simulate(request) {
   sendAlert('Received Event: ' + eventData.type);
 }
 
-function checkWait(target) {
-  replayLog.log('checking:', eventData);
+function simulateInterpretedEvent(interpretedEvent){
+	console.log("interpretedEvent");
+	console.log(interpretedEvent);
+	if (interpretedEvent.type == "click"){
+		console.log(interpretedEvent);
+		console.log(interpretedEvent.events);
+		console.log(interpretedEvents.length);
+		for (var i = 0; i<interpretedEvent.events.length; i++){
+			console.log("going to fire click event");
+			simulate(interpretedEvents.events[i].msg);
+		}
+		console.log("made it through the click events for this interpreted event.");
+	}
+	else if (interpretedEvent.type == "type"){
+		var target = xPathToNodes(interpretedEvent.target)
+		console.log(target);
+		var target_first = target[0];
+		target_first.value = interpetedEvent.value;
+	}
+	port.postMessage({type: 'ack', value: true});
+	replayLog.log('[' + id + '] sent ack');
+}
+
+function checkWait(target){
+  replayLog.log('checking:', target);
   var result = nodeExists(target);
   port.postMessage({type: 'ack', value: result});
+}
+
+function nodeExists(xpath){
+	var nodes = xPathToNodes(xpath);
+	console.log("nodes");
+	console.log(nodes);
+	return nodes.length>0;
 }
 
 // Attach the event handlers to their respective events

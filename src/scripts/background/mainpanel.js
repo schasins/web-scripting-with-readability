@@ -358,7 +358,6 @@ var Record = (function RecordClosure() {
 
       // Tell the content scripts to stop recording
       this.ports.sendToAll({type: 'recording', value: this.getStatus()});
-      this.ports.sendToAll({type: 'deltas', value: null});
     },
     startReplayRecording: function _startReplayRecording() {
       this.recordState = RecordState.REPLAYING;
@@ -872,9 +871,11 @@ var Replay = (function ReplayClosure() {
         if (ackReturn != null && ackReturn == true) {
           this.replayState = ReplayState.REPLAYING;
           this.setNextEvent(0);
+          interpretedEvent["checkedWait"] = true;
 
           replayLog.log('found wait ack');
         } else {
+		  console.log("posting the wait message");
           replayPort.postMessage({type:"wait",target:interpretedEvent.target});
           this.setNextEvent(1000);
 
@@ -895,9 +896,9 @@ var Replay = (function ReplayClosure() {
       } else if (replayState == ReplayState.REPLAYING) {
         this.ports.clearAck();
         //TODO: not sure when this would actually happen.  want to make sure we're actually waiting when needed
-        if (type == 'wait') {
-          replayPort.postMessage({type:"wait",target:target});
-          this.index++;
+        if (!("checkedWait" in interpretedEvent)) {
+		  console.log("posting the wait message");
+          replayPort.postMessage({type:"wait",target:interpretedEvent.target});
           this.replayState = ReplayState.WAIT_ACK;
           this.setNextEvent(0);
 
@@ -905,7 +906,17 @@ var Replay = (function ReplayClosure() {
         } else {
           // send message
           try {
-            replayPort.postMessage(msg);
+			var request = {type:"interpretedEvent",interpretedEvent:JSON.stringify(interpretedEvent)};
+			console.log("request");
+			console.log(request);
+			console.log("----");
+			console.log(interpretedEvent);
+			console.log("----");
+			console.log(JSON.stringify(interpretedEvent));
+			console.log("----");
+			console.log(interpretedEvent);
+			console.log("----");
+            replayPort.postMessage(request);
             replayLog.log('sent message', msg);
 
             this.index++;
