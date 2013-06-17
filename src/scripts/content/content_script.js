@@ -4,9 +4,6 @@
 'use strict';
 
 var port;
-var annotationEvents = {};
-
-var annotationEvents = {};
 
 (function() {
 

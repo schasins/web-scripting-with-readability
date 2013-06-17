@@ -39,9 +39,9 @@ var params = null;
   //    'dragleave': false,
     },
     'KeyboardEvent': {
-      'keydown': true,
-      'keyup': true,
-      'keypress': true
+      'keydown': false,
+      'keyup': false,
+      'keypress': false
     },
     'TextEvent': {
       'textInput': true  // similar to input event, doesn trigger with cp/pst

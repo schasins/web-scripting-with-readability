@@ -477,6 +477,7 @@ var Record = (function RecordClosure() {
 		this.interpretedEvents.push(interpretedEvent);
 		this.panel.addEvent(interpretedEvent);
 		this.addEventsToSend(interpretedEvent);
+		this.recentEvents = [];
 	},
 	addEventsToSend: function _addEventsToSend(interpretedEvent){
 		if (interpretedEvent.type == "click"){
@@ -486,6 +487,7 @@ var Record = (function RecordClosure() {
 		else {
 			var eventsToSend = this.eventsToSend;
 			_.each(interpretedEvent.events, function(e){e.target=interpretedEvent.target; eventsToSend.push(e);});
+			
 			for (prop in interpretedEvent.props){
 				var msg = {type:"propertyReplacement",target:interpretedEvent.target,prop:prop,value:interpretedEvent.props[prop]};
 				var event = {msg:msg};
@@ -499,6 +501,7 @@ var Record = (function RecordClosure() {
 				event["target"] = interpretedEvent.target;
 				this.eventsToSend.push(event);
 			}
+			
 		}
 	},
     eventCategory: function _eventCategory(eventMsg){
@@ -566,8 +569,12 @@ var Record = (function RecordClosure() {
     		interpretedEvent['display'] = "You typed: '"+interpretedEvent['props']['value']+"'.";
     	}
     	else{
-    		interpretedEvent['type'] = 'unknown';
+    		interpretedEvent['type'] = listOfEvents[0].msg.value.type;
     		interpretedEvent['display'] = listOfEvents[0].msg.value.type;
+    		interpretedEvent['props'] = {};
+    		for (var prop in interpretedEvent['divergingProps']){
+				
+			}
     	}
     	return interpretedEvent;
     },
