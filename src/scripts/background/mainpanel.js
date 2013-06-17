@@ -321,6 +321,7 @@ var Record = (function RecordClosure() {
     this.events = [];
     this.recentEvents = [];
     this.interpretedEvents = [];
+    this.eventsToSend = [];
     this.comments = [];
     this.replayEvents = [];
     this.replayComments = [];
@@ -452,11 +453,7 @@ var Record = (function RecordClosure() {
         }
         else{
         	//found an event with a new target
-        	var interpretedEvent = this.interpretEvents(this.recentEvents);
-        	recordLog.log("different list: "+eventRecord.msg.value.target);
-        	recordLog.log("NEW INTERPRETED EVENT: "+interpretedEvent);
-        	this.interpretedEvents.push(interpretedEvent);
-        	this.panel.addEvent(interpretedEvent);
+        	this.newInterpretedEvent();
         	this.recentEvents = [eventRecord]; //time to start a new recentEvents
         }
         /*
@@ -473,6 +470,32 @@ var Record = (function RecordClosure() {
       }
       this.commentCounter = 0;
     },
+    newInterpretedEvent: function _newInterpretedEvent(){
+		if (this.recentEvents.length < 1){
+			return;
+		}
+		var interpretedEvent = this.interpretEvents(this.recentEvents);
+		this.interpretedEvents.push(interpretedEvent);
+		this.panel.addEvent(interpretedEvent);
+		this.addEventsToSend(interpretedEvent);
+	},
+	addEventsToSend: function _addEventsToSend(interpretedEvent){
+		if (interpretedEvent.type == "click"){
+			var eventsToSend = this.eventsToSend;
+			_.each(interpretedEvent.events, function(e){e.target=interpretedEvent.target; eventsToSend.push(e);});
+		}
+		else {
+			var msg = {type:"propertyReplacement",target:interpretedEvent.target,prop:interpretedEvent.prop,value:interpretedEvent.value};
+			var event = {msg:msg};
+			var necessaryProps = ["port","tab","id","url","topFrame","iframeIndex","snapshot","target"];
+			var firstEvent = interpretedEvent.events[0];
+			for (var i = 0; i<necessaryProps.length; i++){
+				var prop = necessaryProps[i];
+				event[prop] = firstEvent[prop];
+			}
+			this.eventsToSend.push(event);
+		}
+	},
     eventCategory: function _eventCategory(eventMsg){
     	var eventType = eventMsg.msg.value.type;
     	if (["click","mouseup","mousedown"].indexOf(eventType) > -1){
@@ -535,6 +558,7 @@ var Record = (function RecordClosure() {
     		console.log("it's typing");
     		interpretedEvent['type'] = 'type';
     		console.log(listOfEvents[listOfEvents.length-1].msg.value);
+    		interpretedEvent['prop'] = 'value';
     		interpretedEvent['value'] = listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot.prop.value;
     		interpretedEvent['display'] = "You typed: '"+interpretedEvent['value']+"'.";
     	}
@@ -571,8 +595,11 @@ var Record = (function RecordClosure() {
     getEvents: function _getEvents() {
       return this.events.slice(0);
     },
-    getInterpretedEvents: function _getEvents() {
+    getInterpretedEvents: function _getInterpretedEvents() {
       return this.interpretedEvents.slice(0);
+    },
+    getEventsToSend: function _getEventsToSend() {
+      return this.eventsToSend.slice(0);
     },
     getReplayEvents: function _getReplayEvents() {
       return this.replayEvents.slice(0);
@@ -795,29 +822,29 @@ var Replay = (function ReplayClosure() {
       return newPort;
     },
     guts: function _guts() {
-      var interpretedEvents = this.events;
+      var eventsToSend = this.events;
       var index = this.index;
       var portMapping = this.portMapping;
       var tabMapping = this.tabMapping;
 
-      if (index >= interpretedEvents.length) {
+      if (index >= eventsToSend.length) {
         this.finish();
         return;
       }
 
-      var interpretedEvent = interpretedEvents[index];
-      var e = interpretedEvent.events[0];
-      var msg = interpretedEvent;
+      var e = eventsToSend[index];
+      console.log(e);
       var port = e.port;
       var tab = e.tab;
       var id = e.id;
       var url = e.topURL;
       var topFrame = e.topFrame;
       var iframeIndex = e.iframeIndex;
-      var target = interpretedEvent.target;
+      var target = e.target;
       var snapshot = e.snapshot;
+      var msg = e.msg;
 
-      $('#status').text('Replay ' + index + " "+ interpretedEvent.type);
+      $('#status').text('Replay ' + index + " "+ e.type);
       //$('#' + id).get(0).scrollIntoView();
       //$("#container").scrollTop($("#" + e.id).prop("offsetTop"));
 
@@ -851,7 +878,7 @@ var Replay = (function ReplayClosure() {
           function(newTab) {
             replayLog.log('new tab opened:', newTab);
             var newTabId = newTab.id;
-            replay.tabMapping[tab] = newTabId;interpretedEvent
+            replay.tabMapping[tab] = newTabId;
             replay.ports.tabIdToTab[newTabId] = newTab;
             replay.setNextEvent(4000);
           }
@@ -862,7 +889,7 @@ var Replay = (function ReplayClosure() {
       // we have hopefully found a matching port, lets dispatch to that port
       var type = msg.type;
       console.log("msg.type: "+msg.type);
-      console.log(interpretedEvent);
+      console.log(e);
       console.log("replayState: "+this.replayState);
       var replayState = this.replayState;
 
@@ -871,12 +898,12 @@ var Replay = (function ReplayClosure() {
         if (ackReturn != null && ackReturn == true) {
           this.replayState = ReplayState.REPLAYING;
           this.setNextEvent(0);
-          interpretedEvent["checkedWait"] = true;
+          e["checkedWait"] = true;
 
           replayLog.log('found wait ack');
         } else {
 		  console.log("posting the wait message");
-          replayPort.postMessage({type:"wait",target:interpretedEvent.target});
+          replayPort.postMessage({type:"wait",target:e.target});
           this.setNextEvent(1000);
 
           replayLog.log('continue waiting for wait ack');
@@ -896,9 +923,9 @@ var Replay = (function ReplayClosure() {
       } else if (replayState == ReplayState.REPLAYING) {
         this.ports.clearAck();
         //TODO: not sure when this would actually happen.  want to make sure we're actually waiting when needed
-        if (!("checkedWait" in interpretedEvent)) {
+        if (!("checkedWait" in e)) {
 		  console.log("posting the wait message");
-          replayPort.postMessage({type:"wait",target:interpretedEvent.target});
+          replayPort.postMessage({type:"wait",target:e.target});
           this.replayState = ReplayState.WAIT_ACK;
           this.setNextEvent(0);
 
@@ -906,17 +933,7 @@ var Replay = (function ReplayClosure() {
         } else {
           // send message
           try {
-			var request = {type:"interpretedEvent",interpretedEvent:JSON.stringify(interpretedEvent)};
-			console.log("request");
-			console.log(request);
-			console.log("----");
-			console.log(interpretedEvent);
-			console.log("----");
-			console.log(JSON.stringify(interpretedEvent));
-			console.log("----");
-			console.log(interpretedEvent);
-			console.log("----");
-            replayPort.postMessage(request);
+            replayPort.postMessage(msg);
             replayLog.log('sent message', msg);
 
             this.index++;
@@ -1074,6 +1091,7 @@ var Controller = (function ControllerClosure() {
     stop: function() {
       ctlLog.log('stop');
       this.record.stopRecording();
+      this.record.newInterpretedEvent(); //take care of the last remaining recent events
 
       // Update the UI
       chrome.browserAction.setBadgeBackgroundColor({color: [0, 0, 0, 0]});
@@ -1089,8 +1107,8 @@ var Controller = (function ControllerClosure() {
 
       var record = this.record;
       var events = record.getEvents();
-      var interpretedEvents = record.getInterpretedEvents();
-      var replay = new Replay(interpretedEvents, this.panel, this.ports, record,
+      var eventsToSend = record.getEventsToSend();
+      var replay = new Replay(eventsToSend, this.panel, this.ports, record,
                               this.scriptServer);
       this.replay = replay;
       replay.replay();

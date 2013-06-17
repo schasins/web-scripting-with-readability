@@ -192,10 +192,8 @@ function handleMessage(request) {
     updateParams(request.value);
   } else if (request.type == 'wait') {
     checkWait(request.target);
-  } else if (request.type == 'interpretedEvent') {
-	console.log("request");
-	console.log(request);
-    simulateInterpretedEvent(JSON.parse(request.interpretedEvent));
+  } else if (request.type == 'propertyReplacement') {
+	propertyReplacement(request);
   } else if (request.type == 'event') {
     simulate(request);
   } else if (request.type == 'snapshot') {
@@ -309,8 +307,8 @@ function simulate(request) {
     log.log('Unknown type of event');
   }
   replayLog.log('[' + id + '] dispatchEvent', eventName, options, oEvent);
-  //port.postMessage({type: 'ack', value: true});
-  //replayLog.log('[' + id + '] sent ack');
+  port.postMessage({type: 'ack', value: true});
+  replayLog.log('[' + id + '] sent ack');
 
   //we're going to use this for synthesis, if synthesis is on
   mostRecentEventMessage = eventData;
@@ -323,25 +321,9 @@ function simulate(request) {
   sendAlert('Received Event: ' + eventData.type);
 }
 
-function simulateInterpretedEvent(interpretedEvent){
-	console.log("interpretedEvent");
-	console.log(interpretedEvent);
-	if (interpretedEvent.type == "click"){
-		console.log(interpretedEvent);
-		console.log(interpretedEvent.events);
-		console.log(interpretedEvents.length);
-		for (var i = 0; i<interpretedEvent.events.length; i++){
-			console.log("going to fire click event");
-			simulate(interpretedEvents.events[i].msg);
-		}
-		console.log("made it through the click events for this interpreted event.");
-	}
-	else if (interpretedEvent.type == "type"){
-		var target = xPathToNodes(interpretedEvent.target)
-		console.log(target);
-		var target_first = target[0];
-		target_first.value = interpetedEvent.value;
-	}
+function propertyReplacement(event){
+	var target = xPathToNodes(event.target);
+	target[event.prop] = event.value;
 	port.postMessage({type: 'ack', value: true});
 	replayLog.log('[' + id + '] sent ack');
 }
