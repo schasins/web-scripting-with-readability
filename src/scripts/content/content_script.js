@@ -140,7 +140,7 @@ function processEvent(eventData) {
     var type = eventData.type;
     var dispatchType = getEventType(type);
     var properties = getEventProps(type);
-    recordLog.log('[' + id + '] process event:', type, dispatchType, eventData);
+    //recordLog.log('[' + id + '] process event:', type, dispatchType, eventData);
 
     var target = eventData.target;
     var nodeName = target.nodeName.toLowerCase();
@@ -175,7 +175,7 @@ function processEvent(eventData) {
       eventMessage['char'] = String.fromCharCode(eventMessage['charCode']);
     }
 
-    recordLog.log('[' + id + '] event message:', eventMessage);
+    //recordLog.log('[' + id + '] event message:', eventMessage);
     if (!params.simulataneous) {
       port.postMessage({type: 'event', value: eventMessage});
     }
@@ -322,11 +322,15 @@ function simulate(request) {
 }
 
 function propertyReplacement(event){
-	console.log("property replacement: " + event.prop + " : "+ event.value);
 	var target = xPathToNodes(event.target)[0];
-	console.log(target);
+	var value = event.value;
+	var prop = event.prop;
+	/*
+	for (var i = 0 ; i < value.length+1 ; i++){
+		target[prop] = value.slice(0,i);
+	}
+	*/
 	target[event.prop] = event.value;
-	console.log(target);
 	port.postMessage({type: 'ack', value: true});
 	replayLog.log('[' + id + '] sent ack');
 }
@@ -334,12 +338,12 @@ function propertyReplacement(event){
 function checkWait(target){
   replayLog.log('checking:', target);
   var result = nodeExists(target);
+  replayLog.log("target exists? "+result);
   port.postMessage({type: 'ack', value: result});
 }
 
 function nodeExists(xpath){
 	var nodes = xPathToNodes(xpath);
-	console.log("nodes");
 	console.log(nodes);
 	return nodes.length>0;
 }

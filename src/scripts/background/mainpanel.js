@@ -286,7 +286,6 @@ var Panel = (function PanelClosure() {
       newDiv += '<b>target:' + '</b>' + target + '<br/>';
       for (var i = 0 ; i < divergingProps.length ; i++){
 		  var prop = divergingProps[i];
-		  console.log(prop);
 		  newDiv += '<b>change:' + '</b>' + prop.prop + ': ' + prop.original + '->' + prop.final + '<br/>';
 	  }
       //newDiv += '<b>tab:' + '</b>' + tab + '<br/>';
@@ -485,19 +484,21 @@ var Record = (function RecordClosure() {
 			_.each(interpretedEvent.events, function(e){e.target=interpretedEvent.target; eventsToSend.push(e);});
 		}
 		else {
-			var msg = {type:"propertyReplacement",target:interpretedEvent.target,prop:interpretedEvent.prop,value:interpretedEvent.value};
-			var event = {msg:msg};
-			var necessaryProps = ["port","tab","id","topURL","topFrame","iframeIndex","snapshot","target"];
-			var firstEvent = interpretedEvent.events[0];
-			for (var i = 0; i<necessaryProps.length; i++){
-				var prop = necessaryProps[i];
-				event[prop] = firstEvent[prop];
+			var eventsToSend = this.eventsToSend;
+			_.each(interpretedEvent.events, function(e){e.target=interpretedEvent.target; eventsToSend.push(e);});
+			for (prop in interpretedEvent.props){
+				var msg = {type:"propertyReplacement",target:interpretedEvent.target,prop:prop,value:interpretedEvent.props[prop]};
+				var event = {msg:msg};
+				var necessaryProps = ["port","tab","id","topURL","topFrame","iframeIndex","snapshot","target"];
+				var firstEvent = interpretedEvent.events[0];
+				for (var i = 0; i<necessaryProps.length; i++){
+					var prop = necessaryProps[i];
+					event[prop] = firstEvent[prop];
+				}
+				event["snapshot"] = firstEvent.msg.value.snapshot;
+				event["target"] = interpretedEvent.target;
+				this.eventsToSend.push(event);
 			}
-			event["snapshot"] = firstEvent.msg.value.snapshot;
-			event["target"] = interpretedEvent.target;
-			console.log("event to push");
-			console.log(event);
-			this.eventsToSend.push(event);
 		}
 	},
     eventCategory: function _eventCategory(eventMsg){
@@ -553,18 +554,16 @@ var Record = (function RecordClosure() {
     	interpretedEvent['divergingProps'] = this.divergingProps(listOfEvents[0],listOfEvents[listOfEvents.length-1]);
     	if (this.eventCategory(listOfEvents[0])=="click"){
     		//it's a click!
-    		console.log("it's a click");
     		interpretedEvent['type'] = 'click';
     		interpretedEvent['display'] = "You clicked.";
     	}
     	else if (this.eventCategory(listOfEvents[0])=="type"){
     		//it's typing
-    		console.log("it's typing");
     		interpretedEvent['type'] = 'type';
-    		console.log(listOfEvents[listOfEvents.length-1].msg.value);
-    		interpretedEvent['prop'] = 'value';
-    		interpretedEvent['value'] = listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot.prop.value;
-    		interpretedEvent['display'] = "You typed: '"+interpretedEvent['value']+"'.";
+    		interpretedEvent['props'] = {value: listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot.prop.value,
+					selectionStart: listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot.prop.selectionStart,
+					selectionEnd: listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot.prop.value};
+    		interpretedEvent['display'] = "You typed: '"+interpretedEvent['props']['value']+"'.";
     	}
     	else{
     		interpretedEvent['type'] = 'unknown';
@@ -580,7 +579,6 @@ var Record = (function RecordClosure() {
     		//console.log(eventTypes.indexOf(listOfEvents[i].msg.value.type) > -1);
     		acc = acc && (eventTypes.indexOf(listOfEvents[i].msg.value.type) > -1);
     	}
-    	console.log("acc: "+acc);
     	return acc;
     	/*
     	return (_.reduce(listOfEvents, function(acc, event) {
@@ -839,7 +837,6 @@ var Replay = (function ReplayClosure() {
       }
 
       var e = eventsToSend[index];
-      console.log(e);
       var port = e.port;
       var tab = e.tab;
       var id = e.id;
@@ -894,9 +891,6 @@ var Replay = (function ReplayClosure() {
 
       // we have hopefully found a matching port, lets dispatch to that port
       var type = msg.type;
-      console.log("msg.type: "+msg.type);
-      console.log(e);
-      console.log("replayState: "+this.replayState);
       var replayState = this.replayState;
 
       if (replayState == ReplayState.WAIT_ACK) {
@@ -908,7 +902,6 @@ var Replay = (function ReplayClosure() {
 
           replayLog.log('found wait ack');
         } else {
-		  console.log("posting the wait message");
           replayPort.postMessage({type:"wait",target:e.target});
           this.setNextEvent(1000);
 
@@ -930,7 +923,6 @@ var Replay = (function ReplayClosure() {
         this.ports.clearAck();
         //TODO: not sure when this would actually happen.  want to make sure we're actually waiting when needed
         if (!("checkedWait" in e)) {
-		  console.log("posting the wait message");
           replayPort.postMessage({type:"wait",target:e.target});
           this.replayState = ReplayState.WAIT_ACK;
           this.setNextEvent(0);
