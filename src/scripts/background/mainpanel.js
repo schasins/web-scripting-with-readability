@@ -487,12 +487,16 @@ var Record = (function RecordClosure() {
 		else {
 			var msg = {type:"propertyReplacement",target:interpretedEvent.target,prop:interpretedEvent.prop,value:interpretedEvent.value};
 			var event = {msg:msg};
-			var necessaryProps = ["port","tab","id","url","topFrame","iframeIndex","snapshot","target"];
+			var necessaryProps = ["port","tab","id","topURL","topFrame","iframeIndex","snapshot","target"];
 			var firstEvent = interpretedEvent.events[0];
 			for (var i = 0; i<necessaryProps.length; i++){
 				var prop = necessaryProps[i];
 				event[prop] = firstEvent[prop];
 			}
+			event["snapshot"] = firstEvent.msg.value.snapshot;
+			event["target"] = interpretedEvent.target;
+			console.log("event to push");
+			console.log(event);
 			this.eventsToSend.push(event);
 		}
 	},
@@ -587,6 +591,8 @@ var Record = (function RecordClosure() {
     clearEvents: function _clearEvents() {
       this.loadedScriptId = null;
       this.events = [];
+      this.interpretedEvents = [];
+      this.eventsToSend = [];
       this.comments = [];
       this.panel.clearEvents();
 

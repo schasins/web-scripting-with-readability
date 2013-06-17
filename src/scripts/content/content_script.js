@@ -322,8 +322,11 @@ function simulate(request) {
 }
 
 function propertyReplacement(event){
-	var target = xPathToNodes(event.target);
+	console.log("property replacement: " + event.prop + " : "+ event.value);
+	var target = xPathToNodes(event.target)[0];
+	console.log(target);
 	target[event.prop] = event.value;
+	console.log(target);
 	port.postMessage({type: 'ack', value: true});
 	replayLog.log('[' + id + '] sent ack');
 }
