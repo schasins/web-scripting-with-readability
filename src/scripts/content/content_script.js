@@ -171,6 +171,14 @@ function processEvent(eventData) {
     if (eventMessage['charCode']) {
       eventMessage['char'] = String.fromCharCode(eventMessage['charCode']);
     }
+    
+    var selector = "#"+target.id;
+    //var jqueryTarget = $(selector);
+    //console.log(eventMessage['html']);
+    //console.log(eventMessage);
+    
+    var html = $('<div>').append($(selector).clone()).html();
+    eventMessage['html'] = html;
 
     //recordLog.log('[' + id + '] event message:', eventMessage);
     if (!params.simulataneous) {

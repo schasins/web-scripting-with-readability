@@ -284,6 +284,7 @@ var Panel = (function PanelClosure() {
                 '<br/>';
       newDiv += display + '<br/>';
       newDiv += '<b>target:' + '</b>' + target + '<br/>';
+      //newDiv += eventRecord.events[0].msg.value.html + '</br>';
       for (var i = 0 ; i < divergingProps.length ; i++){
 		  var prop = divergingProps[i];
 		  newDiv += '<b>change:' + '</b>' + prop.prop + ': ' + prop.original + '->' + prop.final + '<br/>';
@@ -480,16 +481,14 @@ var Record = (function RecordClosure() {
 		this.recentEvents = [];
 	},
 	addEventsToSend: function _addEventsToSend(interpretedEvent){
-		if (interpretedEvent.type == "click"){
-			var eventsToSend = this.eventsToSend;
-			_.each(interpretedEvent.events, function(e){e.target=interpretedEvent.target; eventsToSend.push(e);});
-		}
-		else {
+		if (true) {
 			var eventsToSend = this.eventsToSend;
 			_.each(interpretedEvent.events, function(e){e.target=interpretedEvent.target; eventsToSend.push(e);});
 			
-			for (prop in interpretedEvent.props){
-				var msg = {type:"propertyReplacement",target:interpretedEvent.target,prop:prop,value:interpretedEvent.props[prop]};
+			for (var prop in interpretedEvent.props){
+				var msg = {type:"propertyReplacement", target:interpretedEvent.target, prop:prop, value:interpretedEvent.props[prop]};
+				console.log(msg.prop);
+				console.log(msg.value);
 				var event = {msg:msg};
 				var necessaryProps = ["port","tab","id","topURL","topFrame","iframeIndex","snapshot","target"];
 				var firstEvent = interpretedEvent.events[0];
@@ -555,6 +554,13 @@ var Record = (function RecordClosure() {
     	interpretedEvent['target'] = listOfEvents[0].msg.value.target;
     	interpretedEvent['events'] = listOfEvents;
     	interpretedEvent['divergingProps'] = this.divergingProps(listOfEvents[0],listOfEvents[listOfEvents.length-1]);
+    	interpretedEvent['props'] = {};
+		for (var i = 0; i< interpretedEvent['divergingProps'].length; i++){
+			var prop = interpretedEvent['divergingProps'][i].prop;
+			interpretedEvent['props'][prop] = interpretedEvent['divergingProps'][i].final;
+			console.log("interpreted event: "+ prop +" "+ interpretedEvent['props'][prop]);
+		}
+		
     	if (this.eventCategory(listOfEvents[0])=="click"){
     		//it's a click!
     		interpretedEvent['type'] = 'click';
@@ -563,18 +569,11 @@ var Record = (function RecordClosure() {
     	else if (this.eventCategory(listOfEvents[0])=="type"){
     		//it's typing
     		interpretedEvent['type'] = 'type';
-    		interpretedEvent['props'] = {value: listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot.prop.value,
-					selectionStart: listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot.prop.selectionStart,
-					selectionEnd: listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot.prop.value};
     		interpretedEvent['display'] = "You typed: '"+interpretedEvent['props']['value']+"'.";
     	}
     	else{
     		interpretedEvent['type'] = listOfEvents[0].msg.value.type;
     		interpretedEvent['display'] = listOfEvents[0].msg.value.type;
-    		interpretedEvent['props'] = {};
-    		for (var prop in interpretedEvent['divergingProps']){
-				
-			}
     	}
     	return interpretedEvent;
     },
