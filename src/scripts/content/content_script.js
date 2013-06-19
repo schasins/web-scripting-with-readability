@@ -199,6 +199,8 @@ function handleMessage(request) {
     checkWait(request.target);
   } else if (request.type == 'propertyReplacement') {
 	propertyReplacement(request);
+  } else if (request.type == 'key-sequence') {
+	keySequence(request);
   } else if (request.type == 'event') {
     simulate(request);
   } else if (request.type == 'snapshot') {
@@ -327,6 +329,7 @@ function simulate(request) {
 }
 
 function propertyReplacement(event){
+	console.log("event: prop replacement");
 	var target = xPathToNodes(event.target)[0];
 	var value = event.value;
 	var prop = event.prop;
@@ -336,6 +339,18 @@ function propertyReplacement(event){
 	}
 	*/
 	target[event.prop] = event.value;
+	var $target = $(target);
+	console.log($target);
+	$target.trigger('keydown');
+	setTimeout(function(){port.postMessage({type: 'ack', value: true});},5000);
+	replayLog.log('[' + id + '] sent ack');
+}
+
+function keySequence(event){
+	console.log("event: key seq");
+	var target = xPathToNodes(event.target)[0];
+	var value = event.value;
+	$(target).simulate("key-sequence", {sequence: value});
 	port.postMessage({type: 'ack', value: true});
 	replayLog.log('[' + id + '] sent ack');
 }
