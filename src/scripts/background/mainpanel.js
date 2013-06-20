@@ -502,7 +502,6 @@ var Record = (function RecordClosure() {
 			e.msg.extensionProperty = "data";
 			e.msg.extensionValue = interpretedEvent.props.value;
 			this.eventsToSend.push(e);
-			console.log(interpretedEvent.events[2]);
 		}
 		
 		/*

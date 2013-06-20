@@ -349,7 +349,7 @@ function propertyReplacement(event){
 function type(event){
 	var text = event.extensionValue;
 	simulateExtended(event,text);
-	setTimeout(function(){port.postMessage({type: 'ack', value: true});},1000);
+	port.postMessage({type: 'ack', value: true});
 	console.log("did type event");
 	replayLog.log('[' + id + '] sent ack');
 }
