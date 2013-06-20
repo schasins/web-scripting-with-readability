@@ -487,17 +487,22 @@ var Record = (function RecordClosure() {
 		}
 		
 		if (interpretedEvent.type == "type"){
-			var msg = {type:"key-sequence", target:interpretedEvent.target, value:interpretedEvent.props['value']};
-			var event = {msg:msg};
-			var necessaryProps = ["port","tab","id","topURL","topFrame","iframeIndex","snapshot","target"];
-			var firstEvent = interpretedEvent.events[0];
-			for (var i = 0; i<necessaryProps.length; i++){
-				var prop = necessaryProps[i];
-				event[prop] = firstEvent[prop];
-			}
-			event["snapshot"] = firstEvent.msg.value.snapshot;
-			event["target"] = interpretedEvent.target;
-			this.eventsToSend.push(event);
+			//want to add a textInput event, because some input boxes check whether there have been any
+			/*
+			var e = interpretedEvent.events[0];
+			e.target = interpretedEvent.target;
+			this.eventsToSend.push(e);
+			console.log("textInput");
+			console.log(e);
+			*/
+			var e = interpretedEvent.events[0];
+			e.target = interpretedEvent.target;
+			e.type = "type";
+			e.msg.type = "type";
+			e.msg.extensionProperty = "data";
+			e.msg.extensionValue = interpretedEvent.props.value;
+			this.eventsToSend.push(e);
+			console.log(interpretedEvent.events[2]);
 		}
 		
 		/*
@@ -517,6 +522,7 @@ var Record = (function RecordClosure() {
 			this.eventsToSend.push(event);
 		}
 		*/
+		
 	},
     eventCategory: function _eventCategory(eventMsg){
     	var eventType = eventMsg.msg.value.type;

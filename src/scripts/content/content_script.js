@@ -199,8 +199,8 @@ function handleMessage(request) {
     checkWait(request.target);
   } else if (request.type == 'propertyReplacement') {
 	propertyReplacement(request);
-  } else if (request.type == 'key-sequence') {
-	keySequence(request);
+  } else if (request.type == 'type') {
+	type(request);
   } else if (request.type == 'event') {
     simulate(request);
   } else if (request.type == 'snapshot') {
@@ -342,16 +342,18 @@ function propertyReplacement(event){
 	var $target = $(target);
 	console.log($target);
 	$target.trigger('keydown');
-	setTimeout(function(){port.postMessage({type: 'ack', value: true});},5000);
+	setTimeout(function(){port.postMessage({type: 'ack', value: true});},1000);
 	replayLog.log('[' + id + '] sent ack');
 }
 
-function keySequence(event){
-	console.log("event: key seq");
-	var target = xPathToNodes(event.target)[0];
-	var value = event.value;
-	$(target).simulate("key-sequence", {sequence: value});
-	port.postMessage({type: 'ack', value: true});
+function type(event){
+	var text = event.extensionValue;
+	for (var i = 0; i< text.length ; i++){
+		console.log("next char: "+ text[i]);
+		simulateExtended(event,"data",text[i]);
+	}
+	setTimeout(function(){port.postMessage({type: 'ack', value: true});},1000);
+	console.log("did type event");
 	replayLog.log('[' + id + '] sent ack');
 }
 
@@ -379,6 +381,101 @@ function addListenersForRecording() {
     }
   }
 };
+
+// replay an event from an event message
+function simulateExtended(request,extendProp,extendValue) {
+
+  var eventData = request.value;
+  var eventName = eventData.type;
+
+  replayLog.log('simulating extended: ', eventName, eventData);
+
+  //we're in simulate, so we must be in a tab that's doing replay
+  //we don't want to have to snapshot every time as though we're
+  //recording.  so let's set inReplayTab to true
+  inReplayTab = true;
+
+  if (eventName == 'custom') {
+    var script = eval(eventData.script);
+    script(element, eventData);
+    return;
+  }
+
+  var nodes = xPathToNodes(eventData.target);
+  //if we don't successfully find nodes, let's alert
+  if (nodes.length != 1) {
+    sendAlert("Couldn't find the DOM node we needed.");
+    return;
+  }
+  var target = nodes[0];
+
+  var eventType = getEventType(eventName);
+  var defaultProperties = getEventProps(eventName);
+
+  if (!eventType)
+    throw new SyntaxError(eventData.type + ' event not supported');
+
+  var options = jQuery.extend({}, defaultProperties, eventData);
+
+  var setEventProp = function(e, prop, value) {
+    Object.defineProperty(e, prop, {value: value});
+    if (e.prop != value) {
+      Object.defineProperty(e, prop, {get: function() {value}});
+      Object.defineProperty(e, prop, {value: value});
+    }
+  };
+
+  var oEvent = document.createEvent(eventType);
+  if (eventType == 'Event') {
+    oEvent.initEvent(eventName, options.bubbles, options.cancelable);
+  } else if (eventType == 'MouseEvent') {
+    oEvent.initMouseEvent(eventName, options.bubbles, options.cancelable,
+        document.defaultView, options.detail, options.screenX,
+        options.screenY, options.clientX, options.clientY,
+        options.ctrlKey, options.altKey, options.shiftKey, options.metaKey,
+        options.button, target);
+  } else if (eventType == 'KeyboardEvent') {
+    oEvent.initKeyboardEvent(eventName, options.bubbles, options.cancelable,
+        document.defaultView, options.ctrlKey, options.altKey,
+        options.shiftKey, options.metaKey, options.keyCode,
+        options.charCode);
+
+    var propsToSet = ['charCode', 'keyCode', 'shiftKey', 'metaKey',
+                      'keyIdentifier', 'which'];
+    for (var i = 0, ii = propsToSet.length; i < ii; ++i) {
+      var prop = propsToSet[i];
+      setEventProp(oEvent, prop, options[prop]);
+    }
+    /*
+    for (var p in options) {
+      if (p != "nodeName" && p != "dispatchType" && p != "URL" &&
+          p != "timeStamp")
+        setEventProp(oEvent, p, options[p]);
+    }
+    */
+  } else if (eventType == 'TextEvent') {
+    oEvent.initTextEvent(eventName, options.bubbles, options.cancelable,
+        document.defaultView, options.data, options.inputMethod,
+        options.locale);
+  } else {
+    log.log('Unknown type of event');
+  }
+  //oEvent[request.extensionProperty] = request.extensionValue;
+  setEventProp(oEvent,extendProp,extendValue);
+  console.log(oEvent);
+  
+  replayLog.log('[' + id + '] dispatchEvent', eventName, options, oEvent);
+
+  //we're going to use this for synthesis, if synthesis is on
+  mostRecentEventMessage = eventData;
+  log.log("DISPATCHING EVENT OF TYPE", mostRecentEventMessage.type);
+  
+  //this does the actual event simulation
+  target.dispatchEvent(oEvent);
+
+  //let's update a div letting us know what event we just got
+  sendAlert('Received Event: ' + eventData.type);
+}
 
 
 // We need to add all the events now before and other event listners are
