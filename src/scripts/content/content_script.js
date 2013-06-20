@@ -201,6 +201,8 @@ function handleMessage(request) {
 	propertyReplacement(request);
   } else if (request.type == 'type') {
 	type(request);
+  } else if (request.type == 'select') {
+	select(request);
   } else if (request.type == 'event') {
     simulate(request);
   } else if (request.type == 'snapshot') {
@@ -351,6 +353,15 @@ function type(event){
 	simulateExtended(event,text);
 	port.postMessage({type: 'ack', value: true});
 	console.log("did type event");
+	replayLog.log('[' + id + '] sent ack');
+}
+
+function select(event){
+	console.log("doing select event");
+	var target = xPathToNodes(event.target)[0];
+	var optionToSelect = $(target).children()[event.index];
+	optionToSelect.selected = "selected";
+	port.postMessage({type: 'ack', value: true});
 	replayLog.log('[' + id + '] sent ack');
 }
 

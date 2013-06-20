@@ -480,7 +480,23 @@ var Record = (function RecordClosure() {
 		this.addEventsToSend(interpretedEvent);
 		this.recentEvents = [];
 	},
+	makeEvent: function _makeEvent(msg,sampleEvent){
+		var event = {msg:msg};
+		var necessaryProps = ["port","tab","id","topURL","topFrame","iframeIndex","snapshot","target"];
+		for (var i = 0; i<necessaryProps.length; i++){
+			var prop = necessaryProps[i];
+			event[prop] = sampleEvent[prop];
+		}
+		event["snapshot"] = sampleEvent.msg.value.snapshot;
+		event["target"] = sampleEvent.msg.value.target;
+		return event;
+	},
 	addEventsToSend: function _addEventsToSend(interpretedEvent){
+		if (interpretedEvent.type == "select"){
+			var msg = {type:"select", target: interpretedEvent.target, index: interpretedEvent.index, text: interpretedEvent.text};
+			var event = this.makeEvent(msg,interpretedEvent.events[0]);
+			this.eventsToSend.push(event);
+		}
 		if (interpretedEvent.type == "type"){
 			var e = interpretedEvent.events[0];
 			e.target = interpretedEvent.target;
@@ -575,7 +591,20 @@ var Record = (function RecordClosure() {
 		}
 		*/
 		
-    	if (this.eventCategory(listOfEvents[0])=="click"){
+		var targetNodeName = listOfEvents[0].msg.value.nodeName;
+		
+    	if (targetNodeName == "select"){
+    		//it's a select
+    		interpretedEvent['type'] = 'select';
+    		var lastEventProps = listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot.prop;
+    		var selectedIndex = lastEventProps.selectedIndex;
+    		var outerHTML = $(lastEventProps.outerHTML);
+    		var optionText = outerHTML.children()[selectedIndex].innerText;
+    		interpretedEvent['display'] = "You selected: "+optionText;
+    		interpretedEvent['index'] = selectedIndex;
+    		interpretedEvent['text'] = optionText;
+    	}
+    	else if (this.eventCategory(listOfEvents[0])=="click"){
     		//it's a click!
     		interpretedEvent['type'] = 'click';
     		interpretedEvent['display'] = "You clicked.";
@@ -764,6 +793,7 @@ var Replay = (function ReplayClosure() {
       var ports = this.ports;
       var newTabId = this.tabMapping[tab];
       var portInfo = ports.getTabInfo(newTabId);
+      console.log(msg);
       replayLog.log('trying to find port in tab:');
 
       if (!portInfo) {
