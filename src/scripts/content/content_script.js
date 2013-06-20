@@ -348,10 +348,7 @@ function propertyReplacement(event){
 
 function type(event){
 	var text = event.extensionValue;
-	for (var i = 0; i< text.length ; i++){
-		console.log("next char: "+ text[i]);
-		simulateExtended(event,"data",text[i]);
-	}
+	simulateExtended(event,text);
 	setTimeout(function(){port.postMessage({type: 'ack', value: true});},1000);
 	console.log("did type event");
 	replayLog.log('[' + id + '] sent ack');
@@ -383,7 +380,7 @@ function addListenersForRecording() {
 };
 
 // replay an event from an event message
-function simulateExtended(request,extendProp,extendValue) {
+function simulateExtended(request,dataValue) {
 
   var eventData = request.value;
   var eventName = eventData.type;
@@ -455,13 +452,11 @@ function simulateExtended(request,extendProp,extendValue) {
     */
   } else if (eventType == 'TextEvent') {
     oEvent.initTextEvent(eventName, options.bubbles, options.cancelable,
-        document.defaultView, options.data, options.inputMethod,
+        document.defaultView, dataValue, options.inputMethod,
         options.locale);
   } else {
     log.log('Unknown type of event');
   }
-  //oEvent[request.extensionProperty] = request.extensionValue;
-  setEventProp(oEvent,extendProp,extendValue);
   console.log(oEvent);
   
   replayLog.log('[' + id + '] dispatchEvent', eventName, options, oEvent);
