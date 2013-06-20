@@ -481,20 +481,7 @@ var Record = (function RecordClosure() {
 		this.recentEvents = [];
 	},
 	addEventsToSend: function _addEventsToSend(interpretedEvent){
-		if (interpretedEvent.type == "click"){
-			var eventsToSend = this.eventsToSend;
-			_.each(interpretedEvent.events, function(e){e.target=interpretedEvent.target; eventsToSend.push(e);});
-		}
-		
 		if (interpretedEvent.type == "type"){
-			//want to add a textInput event, because some input boxes check whether there have been any
-			/*
-			var e = interpretedEvent.events[0];
-			e.target = interpretedEvent.target;
-			this.eventsToSend.push(e);
-			console.log("textInput");
-			console.log(e);
-			*/
 			var e = interpretedEvent.events[0];
 			e.target = interpretedEvent.target;
 			e.type = "type";
@@ -502,6 +489,10 @@ var Record = (function RecordClosure() {
 			e.msg.extensionProperty = "data";
 			e.msg.extensionValue = interpretedEvent.props.value;
 			this.eventsToSend.push(e);
+		}
+		else{
+			var eventsToSend = this.eventsToSend;
+			_.each(interpretedEvent.events, function(e){e.target=interpretedEvent.target; eventsToSend.push(e);});
 		}
 		
 		/*
