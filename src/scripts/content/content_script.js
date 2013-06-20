@@ -203,6 +203,10 @@ function handleMessage(request) {
 	type(request);
   } else if (request.type == 'select') {
 	select(request);
+  } else if (request.type == 'copy') {
+	copy(request);
+  } else if (request.type == 'paste') {
+	paste(request);
   } else if (request.type == 'event') {
     simulate(request);
   } else if (request.type == 'snapshot') {
@@ -363,6 +367,33 @@ function select(event){
 	optionToSelect.selected = "selected";
 	port.postMessage({type: 'ack', value: true});
 	replayLog.log('[' + id + '] sent ack');
+}
+
+function copy(event){
+	console.log("doing copy");
+	console.log(event);
+	var target = xPathToNodes(event.target)[0];
+	var text = target.innerText;
+	port.postMessage({type: 'clipboard', value: text});
+	port.postMessage({type: 'ack', value: true});
+	replayLog.log('[' + id + '] sent ack');
+}
+
+function paste(event){
+	console.log("doing paste");
+	var text = event.text;
+	var textToUse = text;
+	if (event.startWord!=null && event.endWord!=null){
+		var words = text.split(" ");
+		if (words.length > event.endWord){
+			var wordsToUse = words.slice(event.startWord,event.endWord);
+			var textToUse = wordsToUse.join(" ");
+		}
+	}
+	event.extensionValue = textToUse;
+	console.log("text to use: "+textToUse);
+	event.value.type = "textInput";
+	type(event);
 }
 
 function checkWait(target){
