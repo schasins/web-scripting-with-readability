@@ -676,21 +676,6 @@ var Record = (function RecordClosure() {
     	}
     	return interpretedEvent;
     },
-    eventTypesAre: function _eventTypesAre(listOfEvents,eventTypes){
-    	var acc = true;
-    	for (var i = 0; i < listOfEvents.length; i++){
-    		//console.log(eventTypes);
-    		//console.log(listOfEvents[i].msg.value.type);
-    		//console.log(eventTypes.indexOf(listOfEvents[i].msg.value.type) > -1);
-    		acc = acc && (eventTypes.indexOf(listOfEvents[i].msg.value.type) > -1);
-    	}
-    	return acc;
-    	/*
-    	return (_.reduce(listOfEvents, function(acc, event) {
-    		return (acc && event.msg.value.type in eventTypes);
-  		}, true));
-  		*/
-    },
     clearEvents: function _clearEvents() {
       this.loadedScriptId = null;
       this.events = [];
@@ -701,6 +686,36 @@ var Record = (function RecordClosure() {
 
       this.ports.sendToAll({type: 'reset', value: null});
     },
+	interpretEventsBatch: function _interpretEventsBatch(events){
+	  console.log("in interpretEventsBatch");
+	  var lastEventType = null;
+	  var currEventType = null;
+	  for (var i = 0; i<events.length; i++){
+		var eventRecord = events[i];
+		var sameEventCategory, sameTarget = false;
+        if (this.recentEvents.length > 0){
+			console.log("length 0");
+			currEventType = this.eventCategory(eventRecord);
+	        sameEventCategory = currEventType == lastEventType;
+	        sameTarget = eventRecord.msg.value.target == this.recentEvents[0].msg.value.target;
+			lastEventType = currEventType;
+	    }
+        if (this.recentEvents.length == 0 || (sameEventCategory && sameTarget)){
+			console.log("if");
+        	recordLog.log("same list: ");
+        	recordLog.log(eventRecord);
+        	this.recentEvents.push(eventRecord);
+        }
+        else{
+			console.log("else");
+        	//found an event with a new target
+        	this.newInterpretedEvent();
+        	this.recentEvents = [eventRecord]; //time to start a new recentEvents
+        }
+	  }
+	  //take care of the last remaining events
+      this.newInterpretedEvent();
+	},
     getEvents: function _getEvents() {
       return this.events.slice(0);
     },
@@ -722,11 +737,9 @@ var Record = (function RecordClosure() {
     setEvents: function _setEvents(events) {
       this.loadedScriptId = null;
       this.events = events;
-      this.comments = [];
       this.panel.clearEvents();
-      for (var i = 0, ii = events.length; i < ii; ++i) {
-        this.panel.addEvent(events[i]);
-      }
+      this.interpretEventsBatch(events);
+      this.comments = [];
     },
     setLoadedScriptId: function _setLoadedScriptId(id) {
       this.loadedScriptId = id;
@@ -1251,9 +1264,10 @@ var Controller = (function ControllerClosure() {
     },
     getScript: function(name) {
       ctlLog.log('getting script');
+      console.log('getting script');
       var controller = this;
-      var events = this.scriptServer.getScript(name,
-          function(scriptId, events) {
+      var events = this.scriptServer.getScript(name, true,
+          function(scriptId, events, comments) {
             controller.setLoadedEvents(scriptId, events);
           });
     },

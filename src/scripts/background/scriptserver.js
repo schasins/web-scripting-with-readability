@@ -24,8 +24,6 @@ var ScriptServer = (function ScriptServerClosure() {
 
         var e = events[i];
         var msgValue = e.msg.value;
-        evtMsg['dom_post_event_state'] = JSON.stringify(msgValue.snapshotAfter);
-        evtMsg['dom_pre_event_state'] = JSON.stringify(msgValue.snapshotBefore);
         evtMsg['event_type'] = msgValue.type;
         evtMsg['execution_order'] = i;
 
@@ -43,9 +41,6 @@ var ScriptServer = (function ScriptServerClosure() {
         }
 
         msgprop: for (var prop in msgValue) {
-          if (prop == 'snapshotBefore' || prop == 'snapshotAfter') {
-            continue msgprop;
-          }
           var propMsg = {};
           var val = msgValue[prop];
           propMsg['name'] = prop;
@@ -80,41 +75,81 @@ var ScriptServer = (function ScriptServerClosure() {
     saveComments: function _saveComments(scriptId, comments) {
       var server = this.server;
 
-      function saveComments() {
-        if (!comments)
-          return;
+      if (!comments)
+        return;
 
-        var postMsg = {};
-        var commentMsg = [];
-        for (var i = 0, ii = comments.length; i < ii; ++i) {
-          var comment = comments[i];
-          comment['script_id'] = parentId;
-          commentMsg.push(comment);
-        }
-
-        postMsg['comments'] = commentMsg;
-        scriptLog.log('saving comments:', postMsg);
-        $.ajax({
-          error: function(jqXHR, textStatus, errorThrown) {
-            scriptLog.log('error comments', jqXHR, textStatus, errorThrown);
-          },
-          success: function(data, textStatus, jqXHR) {
-            scriptLog.log(data, jqXHR, textStatus);
-          },
-          contentType: 'application/json',
-          data: JSON.stringify(postMsg),
-          dataType: 'json',
-          processData: false,
-          type: 'POST',
-          url: server + 'comment/'
-        });
+      var postMsg = {};
+      var commentMsg = [];
+      for (var i = 0, ii = comments.length; i < ii; ++i) {
+        var comment = comments[i];
+        comment['script_id'] = scriptId;
+        commentMsg.push(comment);
       }
 
-      saveComments();
+      postMsg['comments'] = commentMsg;
+      scriptLog.log('saving comments:', postMsg);
+      $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          scriptLog.log('error comments', jqXHR, textStatus, errorThrown);
+        },
+        success: function(data, textStatus, jqXHR) {
+          scriptLog.log(data, jqXHR, textStatus);
+        },
+        contentType: 'application/json',
+        data: JSON.stringify(postMsg),
+        dataType: 'json',
+        processData: false,
+        type: 'POST',
+        url: server + 'comment/'
+      });
     },
-    saveScript: function _saveScript(name, events, comments, parentId) {
+    saveParams: function _saveParams(scriptId, params) {
+      var server = this.server;
+
+      function convertParams(param, prefix) {
+        prefix = prefix || '';
+        var list = [];
+
+        for (var p in param) {
+          var v = param[p];
+          if (typeof v == 'object')
+            list = list.concat(convertParams(v, prefix + p + '.'));
+          else
+            list.push({name: prefix + p, value: v});
+        }
+        return list;
+      }
+
+      var listParams = convertParams(params);
+
+      var postMsg = {};
+
+      postMsg['params'] = listParams;
+      postMsg['script_id'] = scriptId;
+
+      scriptLog.log('saving params:', postMsg);
+      $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          scriptLog.log('error params', jqXHR, textStatus, errorThrown);
+        },
+        success: function(data, textStatus, jqXHR) {
+          scriptLog.log(data, jqXHR, textStatus);
+        },
+        contentType: 'application/json',
+        data: JSON.stringify(postMsg),
+        dataType: 'json',
+        processData: false,
+        type: 'POST',
+        url: server + 'script_param/'
+      });
+    },
+    saveScript: function _saveScript(name, events, comments, params, parentId) {
       if (events.length == 0)
         return;
+
+      // make a copy of the array
+      events = events.slice(0);
+      comments = comments.slice(0);
 
       var scriptServer = this;
       var server = this.server;
@@ -139,6 +174,7 @@ var ScriptServer = (function ScriptServerClosure() {
           var scriptId = data.id;
           scriptServer.saveEvents(scriptId, events);
           scriptServer.saveComments(scriptId, comments);
+          scriptServer.saveParams(scriptId, params);
         },
         contentType: 'application/json',
         data: JSON.stringify(postMsg),
@@ -206,7 +242,7 @@ var ScriptServer = (function ScriptServerClosure() {
       getComments();
       return null;
     },
-    getScript: function _getScript(name, cont) {
+    getScript: function _getScript(name, convert, cont) {
       var scriptServer = this;
       var server = this.server;
 
@@ -225,33 +261,39 @@ var ScriptServer = (function ScriptServerClosure() {
                 script = s;
               }
             }
-            var events = [];
-            scriptServer.getEvents(script.events, function(scriptEvents) {
-              var serverEvents = scriptEvents.sort(function(a, b) {
-                return a.execution_order - b.execution_order;
-              });
 
-              for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
-                var e = serverEvents[i];
-                var serverParams = e.parameters;
-                var event = {};
-                event.msg = {type: 'event', value: {}};
+            scriptServer.getComments(script.id, function(comments) {
+              scriptServer.getEvents(script.events, function(scriptEvents) {
+                var serverEvents = scriptEvents.sort(function(a, b) {
+                  return a.execution_order - b.execution_order;
+                });
 
-                var msgValue = event.msg.value;
-                msgValue.snapshotBefore = JSON.parse(e.dom_pre_event_state);
-                msgValue.snapshotAfter = JSON.parse(e.dom_post_event_state);
-
-                for (var j = 0, jj = serverParams.length; j < jj; ++j) {
-                  var p = serverParams[j];
-                  if (p.name.charAt(0) == '_') {
-                    event[p.name.slice(1)] = JSON.parse(p.value);
-                  } else {
-                    msgValue[p.name] = JSON.parse(p.value);
-                  }
+                if (!convert) {
+                  cont(script.id, serverEvents, comments);
+                  return;
                 }
-                events.push(event);
-              }
-              cont(script.id, events);
+
+                var events = [];
+                for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
+                  var e = serverEvents[i];
+                  var serverParams = e.parameters;
+                  var event = {};
+                  event.msg = {type: 'event', value: {}};
+
+                  var msgValue = event.msg.value;
+
+                  for (var j = 0, jj = serverParams.length; j < jj; ++j) {
+                    var p = serverParams[j];
+                    if (p.name.charAt(0) == '_') {
+                      event[p.name.slice(1)] = JSON.parse(p.value);
+                    } else {
+                      msgValue[p.name] = JSON.parse(p.value);
+                    }
+                  }
+                  events.push(event);
+                }
+                cont(script.id, events, comments);
+              });
             });
           }
         },
@@ -262,9 +304,103 @@ var ScriptServer = (function ScriptServerClosure() {
         dataType: 'json'
       });
       return null;
-    }
+    },
+    getBenchmarks: function _getBenchmarks(cont) {
+      var scriptServer = this;
+      var server = this.server;
+
+      $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          scriptLog.log(jqXHR, textStatus, errorThrown);
+        },
+        success: function(data, textStatus, jqXHR) {
+          scriptLog.log(data, textStatus, jqXHR);
+          var benchmarks = data;
+          cont(benchmarks);
+        },
+        url: server + 'benchmark/?format=json',
+        type: 'GET',
+        processData: false,
+        accepts: 'application/json',
+        dataType: 'json'
+      });
+      return null;
+    },
+    saveBenchmarkRun: function _saveBenchmarkRun(benchmarkRun) {
+      var scriptServer = this;
+      var server = this.server;
+
+      var postMsg = {};
+      postMsg['benchmark'] = benchmarkRun.benchmark.id;
+      postMsg['successful'] = benchmarkRun.successful;
+      postMsg['events_executed'] = benchmarkRun.events_executed;
+      
+      if (benchmarkRun.errors)
+        postMsg['errror'] = benchmarkRun.errors;
+
+      $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          scriptLog.log(jqXHR, textStatus, errorThrown);
+        },
+        success: function(data, textStatus, jqXHR) {
+          scriptLog.log(data, textStatus, jqXHR);
+        },
+        contentType: 'application/json',
+        data: JSON.stringify(postMsg),
+        dataType: 'json',
+        processData: false,
+        type: 'POST',
+        url: server + 'benchmark_run/',
+      });
+      return null;
+    },
+    saveCapture: function _saveCapture(capture, scriptId) {
+      var scriptServer = this;
+      var server = this.server;
+
+      var postMsg = {};
+      postMsg['script'] = scriptId;
+      postMsg['innerHtml'] = capture.innerHtml;
+      postMsg['nodeName'] = capture.nodeName;
+      
+      $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          scriptLog.log(jqXHR, textStatus, errorThrown);
+        },
+        success: function(data, textStatus, jqXHR) {
+          scriptLog.log(data, textStatus, jqXHR);
+        },
+        contentType: 'application/json',
+        data: JSON.stringify(postMsg),
+        dataType: 'json',
+        processData: false,
+        type: 'POST',
+        url: server + 'capture/',
+      });
+      return null;
+    },
+    getCapture: function _getCapture(scriptId, cont) {
+      var scriptServer = this;
+      var server = this.server;
+
+      $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          scriptLog.log(jqXHR, textStatus, errorThrown);
+        },
+        success: function(data, textStatus, jqXHR) {
+          scriptLog.log(data, textStatus, jqXHR);
+          var capture = data;
+          cont(capture);
+        },
+        url: server + 'capture/' + scriptId + '/?format=json',
+        type: 'GET',
+        processData: false,
+        accepts: 'application/json',
+        dataType: 'json'
+      });
+      return null;
+    },
   };
 
   return ScriptServer;
 })();
-
