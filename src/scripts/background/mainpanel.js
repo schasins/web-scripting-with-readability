@@ -499,7 +499,7 @@ var Record = (function RecordClosure() {
 	},
 	addEventsToSend: function _addEventsToSend(interpretedEvent){
 		if (interpretedEvent.type == "select"){
-			var msg = {type:"select", target: interpretedEvent.target, index: interpretedEvent.index, text: interpretedEvent.text};
+			var msg = {type:"select", target: interpretedEvent.target, index: interpretedEvent.index, text: interpretedEvent.text, value: interpretedEvent.value};
 			var event = this.makeEvent(msg,interpretedEvent.events[0]);
 			this.eventsToSend.push(event);
 		}
@@ -596,6 +596,10 @@ var Record = (function RecordClosure() {
     divergingProps: function _divergingProps(eventRecord1,eventRecord2){
 	  var obj1 = eventRecord1.msg.value.targetSnapshot;
 	  var obj2 = eventRecord2.msg.value.targetSnapshot;
+	  if (!(obj1 && obj2)){
+		  obj1 = eventRecord1.msg.value.nodeSnapshot;
+		  obj2 = eventRecord2.msg.value.nodeSnapshot;
+	  }
 	  if (!(obj1 && obj2 && obj1.prop && obj2.prop)) {
 		console.log('DIVERGING PROP WEIRDNESS ', obj1, obj2);
 		return [];
@@ -615,6 +619,8 @@ var Record = (function RecordClosure() {
     	var interpretedEvent = [];
     	interpretedEvent['target'] = listOfEvents[0].msg.value.target;
     	interpretedEvent['events'] = listOfEvents;
+    	console.log(listOfEvents[0]);
+    	console.log(listOfEvents[listOfEvents.length-1]);
     	interpretedEvent['divergingProps'] = this.divergingProps(listOfEvents[0],listOfEvents[listOfEvents.length-1]);
     	interpretedEvent['props'] = {};
     	
@@ -631,12 +637,17 @@ var Record = (function RecordClosure() {
     	if (targetNodeName == "select"){
     		//it's a select
     		interpretedEvent['type'] = 'select';
-    		var lastEventProps = listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot.prop;
+    		var snapshot = listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot;
+    		if (!snapshot){
+				snapshot = listOfEvents[listOfEvents.length-1].msg.value.nodeSnapshot;
+			}
+    		var lastEventProps = snapshot.prop;
     		var selectedIndex = lastEventProps.selectedIndex;
     		var outerHTML = $(lastEventProps.outerHTML);
     		var optionText = outerHTML.children()[selectedIndex].innerText;
     		interpretedEvent['display'] = "You selected: "+optionText;
     		interpretedEvent['index'] = selectedIndex;
+    		interpretedEvent['value'] = lastEventProps.value;
     		interpretedEvent['text'] = optionText;
     	}
     	else if (this.eventCategory(listOfEvents[0])=="click"){
@@ -647,18 +658,31 @@ var Record = (function RecordClosure() {
     	else if (this.eventCategory(listOfEvents[0])=="type"){
     		//it's typing
     		interpretedEvent['type'] = 'type';
-    		interpretedEvent['props'].value = listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot.prop.value;
+    		var snapshot = listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot;
+    		if (!snapshot){
+				snapshot = listOfEvents[listOfEvents.length-1].msg.value.nodeSnapshot;
+			}
+    		interpretedEvent['props'].value = snapshot.prop.value;
     		interpretedEvent['display'] = "You typed: '"+interpretedEvent['props']['value']+"'.";
     	}
     	else if (this.eventCategory(listOfEvents[0]) == "copy"){
 			interpretedEvent['type'] = 'copy';
-			interpretedEvent['text'] = listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot.prop.innerText;
+    		var snapshot = listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot;
+    		if (!snapshot){
+				snapshot = listOfEvents[listOfEvents.length-1].msg.value.nodeSnapshot;
+			}
+			interpretedEvent['text'] = snapshot.prop.innerText;
 			interpretedEvent['display'] = "You copied";
 			this.lastRecordedCopy = interpretedEvent;
 		}
     	else if (this.eventCategory(listOfEvents[0]) == "paste"){
 			interpretedEvent['type'] = 'paste';
-			var actualPastedText = interpretedEvent.events[interpretedEvent.events.length - 1].msg.value.targetSnapshot.prop.value;
+			
+    		var snapshot = listOfEvents[listOfEvents.length-1].msg.value.targetSnapshot;
+    		if (!snapshot){
+				snapshot = listOfEvents[listOfEvents.length-1].msg.value.nodeSnapshot;
+			}
+			var actualPastedText = snapshot.prop.value;
 			if (this.lastRecordedCopy != null){
 				//if we know the last copy, we can figure out which of the words in the element were actually copied during that copy, don't have to assume whole thing
 				var potentialCopyText = this.lastRecordedCopy.text;

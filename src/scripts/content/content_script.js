@@ -363,8 +363,12 @@ function type(event){
 function select(event){
 	console.log("doing select event");
 	var target = xPathToNodes(event.target)[0];
+	target.selectedIndex = event.index;
+	target.value = event.value;
 	var optionToSelect = $(target).children()[event.index];
 	optionToSelect.selected = "selected";
+	$(target).trigger('change');
+	//$(optionToSelect).trigger('change');
 	port.postMessage({type: 'ack', value: true});
 	replayLog.log('[' + id + '] sent ack');
 }
